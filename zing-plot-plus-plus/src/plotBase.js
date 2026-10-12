@@ -58,7 +58,7 @@ class PlotBaseElement extends HTMLElement {
    * @returns {void}
    */
   set Title(title) {
-    this._title = title;
+    this._title = sanitizeText(title);
   }
 
   /**
@@ -77,7 +77,7 @@ class PlotBaseElement extends HTMLElement {
    * @returns {void}
    */
   set XAxisLabel(xAxisLabel) {
-    this._xAxisLabel = xAxisLabel;
+    this._xAxisLabel = sanitizeText(xAxisLabel);
   }
 
   /**
@@ -86,7 +86,7 @@ class PlotBaseElement extends HTMLElement {
    * @returns {void}
    */
   set YAxisLabel(yAxisLabel) {
-    this._yAxisLabel = yAxisLabel;
+    this._yAxisLabel = sanitizeText(yAxisLabel);
   }
 
   /**
@@ -172,9 +172,10 @@ class PlotBaseElement extends HTMLElement {
    * @returns {void}
    */
   setChartProperties(chartData, width, height, centerOrigin, anchorX, anchorY, rangeX, rangeY, ticks) {
-    this._title = chartData.title;
-    this._xAxisLabel = chartData["x-axis-label"];
-    this._yAxisLabel = chartData["y-axis-label"];
+    this._title = sanitizeText(chartData.title);
+    this._xAxisLabel = sanitizeText(chartData["x-axis-label"]);
+    this._yAxisLabel = sanitizeText(chartData["y-axis-label"]);
+    // TODO: I think we need input verification on these still
     this._points = chartData.points;
     this._width = width;
     this._height = height;
@@ -355,23 +356,20 @@ class PlotBaseElement extends HTMLElement {
     });
 
     //axes, chart title, etc
-
     svg += `
           <line x1="${margin.left}" y1="${margin.top + sizes.plotHeight}" x2="${margin.left + sizes.plotWidth}" y2="${margin.top + sizes.plotHeight}" class="axis-line" />
           <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + sizes.plotHeight}" class="axis-line" />
       `;
 
-    // Title and labels can come from uploaded files, so escape them as text.
-    const escape = (text) => String(text ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;');
     const titleY = margin.top * 0.6;
     const xLabelY = y - (margin.bottom * 0.15);
     const yLabelX = margin.left * 0.25;
     const yLabelY = margin.top + (sizes.plotHeight / 2);
 
     svg += `
-          <text x="${x / 2}" y="${titleY}" class="title-text">${escape(chartData.title)}</text>
-          <text x="${margin.left + (sizes.plotWidth / 2)}" y="${xLabelY}" class="label-text">${escape(chartData['x-axis-label'])}</text>
-          <text x="${yLabelX}" y="${yLabelY}" class="label-text" transform="rotate(-90, ${yLabelX}, ${yLabelY})">${escape(chartData['y-axis-label'])}</text>
+          <text x="${x / 2}" y="${titleY}" class="title-text">${chartData.title}</text>
+          <text x="${margin.left + (sizes.plotWidth / 2)}" y="${xLabelY}" class="label-text">${chartData['x-axis-label']}</text>
+          <text x="${yLabelX}" y="${yLabelY}" class="label-text" transform="rotate(-90, ${yLabelX}, ${yLabelY})">${chartData['y-axis-label']}</text>
       `;
 
     // Let subclasses implement their own plot elements.
@@ -472,6 +470,15 @@ class PlotBaseElement extends HTMLElement {
     });
   }
 }
+
+/**
+ * Sanitizes a text field by removing potentially dangerous characters.
+ * @param {string} text 
+ * @returns A sanitized version of text, with < and & characters replaced.
+ */
+function sanitizeText(text){
+  return String(text ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;');
+} 
 
 /**
  * A custom element for displaying a tooltip.
