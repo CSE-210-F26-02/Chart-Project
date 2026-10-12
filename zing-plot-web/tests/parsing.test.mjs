@@ -25,21 +25,15 @@ describe('numbers() - manual X/Y entry', () => {
     assert.throws(() => site.numbers('NaN'), /valid numbers/);
   });
 
-  test('a trailing comma does not add a phantom 0', {
-    todo: 'BUG-10: "1, 2, 3," becomes [1, 2, 3, 0]',
-  }, () => {
+  test('a trailing comma does not add a phantom 0', () => {
     assert.deepEqual(numbers('1, 2, 3,'), [1, 2, 3]);
   });
 
-  test('a leading comma is ignored', {
-    todo: 'BUG-13: ",1,2" is rejected with "Please enter X and Y values."',
-  }, () => {
+  test('a leading comma is ignored', () => {
     assert.deepEqual(numbers(',1,2'), [1, 2]);
   });
 
-  test('hex and binary literals are rejected', {
-    todo: 'BUG-07: "0x1F" is silently read as 31',
-  }, () => {
+  test('hex and binary literals are rejected', () => {
     assert.throws(() => site.numbers('0x1F'), /valid numbers/);
   });
 });

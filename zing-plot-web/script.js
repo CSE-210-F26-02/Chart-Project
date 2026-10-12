@@ -32,7 +32,7 @@ function escapeXML(value) {
 
 // Convert comma-separated or whitespace-separated input into numeric values.
 function numbers(value) {
-  const pieces = String(value).trim().split(/[\s,;]+/);
+  const pieces = String(value).trim().split(/[\s,;]+/).filter(Boolean);
 
   if (!pieces[0]) {
     throw new Error("Please enter X and Y values.");
@@ -41,7 +41,7 @@ function numbers(value) {
   return pieces.map((value) => {
     const number = Number(value);
 
-    if (!Number.isFinite(number)) {
+    if (!Number.isFinite(number) || /^[+-]?0[box]/i.test(value)) {
       throw new Error("X and Y values must be valid numbers.");
     }
 
@@ -71,13 +71,17 @@ function validate(data) {
       throw new Error("X and Y values must be numbers.");
     }
     const number = Number(value);
-    if (!Number.isFinite(number)) {
+    if (!Number.isFinite(number) || /^[+-]?0[box]/i.test(String(value).trim())) {
       throw new Error("X and Y values must be valid numbers.");
     }
     return number;
   };
   const x = data.x.map(toNumber);
   const y = data.y.map(toNumber);
+  // Near the float max, the chart's axis range overflows to Infinity.
+  if (Math.max(...x, ...y) > 1e300) {
+    throw new Error("Values are too large to chart.");
+  }
   // Negative values are out of scope: the axes always start at 0, so they would
   // be drawn off-chart. Tell the user instead of showing a blank chart.
   if (x.some((n) => n < 0) || y.some((n) => n < 0)) {
@@ -85,7 +89,14 @@ function validate(data) {
       "Negative values are not supported. Please use X and Y values of 0 or greater."
     );
   }
-  return { ...data, x, y };
+  return {
+    ...data,
+    title: String(data.title).slice(0, 100),
+    xLabel: String(data.xLabel).slice(0, 60),
+    yLabel: String(data.yLabel).slice(0, 60),
+    x,
+    y,
+  };
 }
 
 // Display success messages or validation errors below the input card.
@@ -230,10 +241,10 @@ function parseJSON(text) {
     }
     return {
       x: value.map(
-        (point) => Array.isArray(point) ? point[0] : point.x
+        (point) => Array.isArray(point) ? point[0] : point?.x
       ),
       y: value.map(
-        (point) => Array.isArray(point) ? point[1] : point.y
+        (point) => Array.isArray(point) ? point[1] : point?.y
       ),
     };
   }
@@ -254,7 +265,7 @@ function parseJSON(text) {
       (
         Array.isArray(points)
           ? points.map(
-            (point) => Array.isArray(point) ? point[0] : point.x
+            (point) => Array.isArray(point) ? point[0] : point?.x
           )
           : undefined
       ),
@@ -264,7 +275,7 @@ function parseJSON(text) {
       (
         Array.isArray(points)
           ? points.map(
-            (point) => Array.isArray(point) ? point[1] : point.y
+            (point) => Array.isArray(point) ? point[1] : point?.y
           )
           : undefined
       ),
