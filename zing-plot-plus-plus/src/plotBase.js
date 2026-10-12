@@ -58,7 +58,7 @@ class PlotBaseElement extends HTMLElement {
    * @returns {void}
    */
   set Title(title) {
-    this._title = title;
+    this._title = sanitizeText(title);
   }
 
   /**
@@ -77,7 +77,7 @@ class PlotBaseElement extends HTMLElement {
    * @returns {void}
    */
   set XAxisLabel(xAxisLabel) {
-    this._xAxisLabel = xAxisLabel;
+    this._xAxisLabel = sanitizeText(xAxisLabel);
   }
 
   /**
@@ -86,7 +86,7 @@ class PlotBaseElement extends HTMLElement {
    * @returns {void}
    */
   set YAxisLabel(yAxisLabel) {
-    this._yAxisLabel = yAxisLabel;
+    this._yAxisLabel = sanitizeText(yAxisLabel);
   }
 
   /**
@@ -172,9 +172,10 @@ class PlotBaseElement extends HTMLElement {
    * @returns {void}
    */
   setChartProperties(chartData, width, height, centerOrigin, anchorX, anchorY, rangeX, rangeY, ticks) {
-    this._title = chartData.title;
-    this._xAxisLabel = chartData["x-axis-label"];
-    this._yAxisLabel = chartData["y-axis-label"];
+    this._title = sanitizeText(chartData.title);
+    this._xAxisLabel = sanitizeText(chartData["x-axis-label"]);
+    this._yAxisLabel = sanitizeText(chartData["y-axis-label"]);
+    // TODO: I think we need input verification on these still
     this._points = chartData.points;
     this._width = width;
     this._height = height;
@@ -252,6 +253,10 @@ class PlotBaseElement extends HTMLElement {
       gridDash: Math.max(minDim * 0.008, 2)
     };
 
+    // A zero range (e.g. a single point at 0) would divide by zero; use 1 instead.
+    rangeX = rangeX || 1;
+    rangeY = rangeY || 1;
+
     // calculate domain of graph
     let domainMinX, domainMaxX, domainMinY, domainMaxY;
     if (center === true) {
@@ -313,7 +318,7 @@ class PlotBaseElement extends HTMLElement {
           <style>
               .grid-line { stroke: #e0e0e0; stroke-width: ${sizes.gridStroke}; stroke-dasharray: ${sizes.gridDash}; }
               .axis-line { stroke: #333; stroke-width: ${sizes.axisStroke}; }
-              // TODO: Plotted line style
+              /* TODO: Plotted line style */
               .plot-line { stroke: #111; stroke-width: ${sizes.axisStroke}; }
               .axis-text { font-family: sans-serif; font-size: ${sizes.tickFont}px; fill: #555; text-anchor: middle; }
               .label-text { font-family: sans-serif; font-size: ${sizes.labelFont}px; font-weight: bold; fill: #333; text-anchor: middle; }
@@ -351,7 +356,6 @@ class PlotBaseElement extends HTMLElement {
     });
 
     //axes, chart title, etc
-
     svg += `
           <line x1="${margin.left}" y1="${margin.top + sizes.plotHeight}" x2="${margin.left + sizes.plotWidth}" y2="${margin.top + sizes.plotHeight}" class="axis-line" />
           <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + sizes.plotHeight}" class="axis-line" />
@@ -466,6 +470,15 @@ class PlotBaseElement extends HTMLElement {
     });
   }
 }
+
+/**
+ * Sanitizes a text field by removing potentially dangerous characters.
+ * @param {string} text 
+ * @returns A sanitized version of text, with < and & characters replaced.
+ */
+function sanitizeText(text){
+  return String(text ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;');
+} 
 
 /**
  * A custom element for displaying a tooltip.
