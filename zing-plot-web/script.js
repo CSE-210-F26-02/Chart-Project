@@ -1,3 +1,5 @@
+import line from "../zing-plot-plus-plus/src/line.js";
+
 // This application currently runs entirely in the browser.
 const $ = (id) => document.getElementById(id);
 
@@ -337,8 +339,17 @@ async function handleSaveChart() {
   try {
     // BACKEND HOOK: add cloud storage or a server export request here.
     const chartComponent = $("chart");
+    if (!chartComponent) {
+      throw new Error("No chart is available to save.");
+    }
+    const svgRoot = chartComponent.shadowRoot
+      ? chartComponent.shadowRoot.querySelector("svg")
+      : chartComponent.querySelector("svg");
+    if (!svgRoot) {
+      throw new Error("No SVG chart was found.");
+    }
     // Clone the SVG element to avoid modifying the original.
-    const svg = chartComponent.shadowRoot.querySelector("svg").cloneNode(true);
+    const svg = svgRoot.cloneNode(true);
     svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     svg.setAttribute("width", "1268");
     svg.setAttribute("height", "1420");
@@ -462,7 +473,22 @@ function renderChart() {
     const containerWidth = chartContainer.offsetWidth;
     const containerHeight = chartContainer.offsetHeight;
     if (chartType === "line") {
-      /* TODO: Implement line chart rendering */
+      const chartMarkup = line({
+        title: dataset.title,
+        "x-axis-label": dataset.xLabel,
+        "y-axis-label": dataset.yLabel,
+        points: dataset.x.map((x, i) => ({ coordinate: [x, dataset.y[i]] }))
+      }, containerWidth,
+        containerHeight,
+        false, 0, 0,
+        Math.max(...dataset.x) + (Math.max(...dataset.x) - Math.min(...dataset.x)) * 0.1,
+        Math.max(...dataset.y) + (Math.max(...dataset.y) - Math.min(...dataset.y)) * 0.1,
+        10);
+
+      const wrapper = document.createElement('div');
+      wrapper.id = 'chart';
+      wrapper.innerHTML = chartMarkup;
+      chartContainer.appendChild(wrapper);
     } else {
       chart = document.createElement('scatter-plot');
       chart.setChartProperties({

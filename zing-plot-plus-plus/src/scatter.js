@@ -108,7 +108,7 @@ function scatter(chartData, x, y, center, centerx, centery, rangeX, rangeY, tick
     };
 
     // build svg, check style for possible customization, using class tags for simplicity
-    let svg = `<svg width="${x}" height="${y}" viewBox="0 0 ${x} ${y}" xmlns="http://www.w3.org/2000/svg">
+    let svg = `<svg class="chart-svg" width="${x}" height="${y}" viewBox="0 0 ${x} ${y}" xmlns="http://www.w3.org/2000/svg">
         <style>
             .grid-line { stroke: #e0e0e0; stroke-width: ${sizes.gridStroke}; stroke-dasharray: ${sizes.gridDash}; }
             .axis-line { stroke: #333; stroke-width: ${sizes.axisStroke}; }
