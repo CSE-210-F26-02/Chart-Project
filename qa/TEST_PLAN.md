@@ -1,6 +1,6 @@
 # Zing Plot Plus Plus: QA Test Plan
 
-Owner: Gage (QA). Last run: 2026-10-11 against `main` @ `d067559` (library `zing-plot-plus-plus@1.0.8`).
+Owner: Gage (QA). Last run: 2026-10-16 against `main` @ `d067559` (library `zing-plot-plus-plus@1.0.10`).
 
 ## Goal
 
@@ -47,7 +47,7 @@ A test fails if a file has no manifest entry.
 
 | Suite | Pass | TODO (known bug) | Fail |
 |---|---|---|---|
-| Library | 14 | 3 | 0 |
+| Library | 26 | 0 | 0 |
 | Site + fixtures | 52 | 9 | 0 |
 
 The parser handled most of the hostile input correctly: empty files, missing
@@ -57,20 +57,18 @@ input that parses fine still draws a broken or blank chart.
 
 ## Bugs found
 
-14 open bugs. BUG-01 (line chart not sorted by X) was fixed by David in #3. Owners follow the meeting-notes roles; reassign in GitHub issues as needed.
+10 open bugs. BUG-01 (line chart not sorted by X) was fixed by David in #3. BUG-02 (unescaped title/labels), BUG-03 (missing labels printed as “undefined”), BUG-04 (NaN on a zero range) and BUG-16 (// comment in the SVG <style>) were fixed by Russel in the library, and BUG-18 (tooltip showed negative values in scientific notation, e.g. -5 → -5.00e+0) was found and fixed by Russel. Each has a test in plots.test.js that guards it. Owners follow the meeting-notes roles; reassign in GitHub issues as needed.
 Fixture files are in `qa/fixtures/`.
 
 ### High: fix first
 
 | ID | Problem | Reproduce | Fix | Owner |
 |---|---|---|---|---|
-| BUG-02 | Title/labels are inserted as raw HTML: a CSV header can run JavaScript, and the data points vanish | `html-in-header.csv` | Escape text in the library | Charlie |
 
 ### Medium
 
 | ID | Problem | Reproduce | Fix | Owner |
 |---|---|---|---|---|
-| BUG-04 | A single point at (0, 0) gives NaN coordinates and a blank chart | `single-point-origin.csv` | Treat a zero range as 1 | Charlie |
 | BUG-08 | Imported titles/labels have no length limit; 100k characters overflow the chart | `title-100k-chars.json` | Apply the form's limits | Nathan |
 | BUG-09 | A numeric JSON title breaks Save | `numeric-title.json`, then Save | Convert the title to a string | Nathan |
 | BUG-10 | A trailing comma adds a phantom 0 (`1, 2, 3,`) | Manual entry | Ignore empty entries | Nathan |
@@ -81,12 +79,10 @@ Fixture files are in `qa/fixtures/`.
 
 | ID | Problem | Reproduce | Fix | Owner |
 |---|---|---|---|---|
-| BUG-03 | Missing labels print "undefined" | Library call without labels | Default to empty | Charlie |
 | BUG-06 | `null` in JSON shows a raw JavaScript error | `null-point.json` | Validate each point | Nathan |
 | BUG-07 | Hex/binary accepted as numbers (`0x10` → 16) | `hex-binary-values.csv` | Accept decimal only | Nathan |
 | BUG-12 | Values near the float max overflow the axis to Infinity | `huge-values.csv` | Reject values over 1e300 | Nathan |
 | BUG-13 | A leading comma gives a misleading error | Manual entry `,1,2` | Same fix as BUG-10 | Nathan |
-| BUG-16 | `// TODO` in the SVG `<style>` silently drops a CSS rule | `plotBase.js` | Use `/* */` | Charlie |
 | BUG-17 | Changing a label attribute after render throws | `setAttribute('x-axis-label', …)` | Fix the selectors | Brian |
 
 ## Manual / exploratory checklist
