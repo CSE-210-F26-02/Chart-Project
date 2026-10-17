@@ -1,4 +1,17 @@
 /**
+ * Escapes text so it is safe to put inside SVG/HTML markup.
+ * Missing values (undefined/null) become an empty string.
+ */
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * @typedef {object} Point
  * @property {Array<number>} coordinate - Array containing the X and Y coordinates of the point
  */
@@ -228,6 +241,11 @@ class PlotBaseElement extends HTMLElement {
   generateGraph(chartData, x, y, center, centerx, centery, rangeX, rangeY, ticks) {
     const minDim = Math.min(x, y);
 
+    // A zero range would divide by zero in scaleX/scaleY (and break the ticks),
+    // e.g. a single point at the origin. Fall back to a range of 1.
+    if (!rangeX) rangeX = 1;
+    if (!rangeY) rangeY = 1;
+
     // TODO: Consolidate size parameters during generation? Update applyPlotElements if so.
 
     const margin = {
@@ -363,9 +381,9 @@ class PlotBaseElement extends HTMLElement {
     const yLabelY = margin.top + (sizes.plotHeight / 2);
 
     svg += `
-          <text x="${x / 2}" y="${titleY}" class="title-text">${chartData.title}</text>
-          <text x="${margin.left + (sizes.plotWidth / 2)}" y="${xLabelY}" class="label-text">${chartData['x-axis-label']}</text>
-          <text x="${yLabelX}" y="${yLabelY}" class="label-text" transform="rotate(-90, ${yLabelX}, ${yLabelY})">${chartData['y-axis-label']}</text>
+      <text x="${x / 2}" y="${titleY}" class="title-text">${escapeHtml(chartData.title)}</text>
+      <text x="${margin.left + (sizes.plotWidth / 2)}" y="${xLabelY}" class="label-text">${escapeHtml(chartData['x-axis-label'])}</text>
+      <text x="${yLabelX}" y="${yLabelY}" class="label-text" transform="rotate(-90, ${yLabelX}, ${yLabelY})">${escapeHtml(chartData['y-axis-label'])}</text>
       `;
 
     // Let subclasses implement their own plot elements.
