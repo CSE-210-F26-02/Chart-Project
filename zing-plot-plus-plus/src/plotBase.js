@@ -331,7 +331,7 @@ class PlotBaseElement extends HTMLElement {
           <style>
               .grid-line { stroke: #e0e0e0; stroke-width: ${sizes.gridStroke}; stroke-dasharray: ${sizes.gridDash}; }
               .axis-line { stroke: #333; stroke-width: ${sizes.axisStroke}; }
-              // TODO: Plotted line style
+              /* TODO: Plotted line style */
               .plot-line { stroke: #111; stroke-width: ${sizes.axisStroke}; }
               .axis-text { font-family: sans-serif; font-size: ${sizes.tickFont}px; fill: #555; text-anchor: middle; }
               .label-text { font-family: sans-serif; font-size: ${sizes.labelFont}px; font-weight: bold; fill: #333; text-anchor: middle; }
@@ -503,14 +503,15 @@ class ToolTipModal extends HTMLElement {
     return ['x-coordinate', 'y-coordinate', 'x-position', 'y-position', 'font-size', 'font-family', 'visible'];
   }
 
-  formatValue(value) {
-    // If the number is larger than 100,000 use scientific notation
-    const num = parseFloat(value);
-    if (num > 100000 || num < 0.001 && num !== 0) {
-      return num.toExponential(2);
-    }
-    return num.toFixed(2);
-  }
+   formatValue(value) {
+     // If the number is larger than 100,000 use scientific notation
+     const num = parseFloat(value);
+     const abs = Math.abs(num);
+     if (abs > 100000 || (abs < 0.001 && abs !== 0)) {
+       return num.toExponential(2);
+     }
+     return num.toFixed(2);
+   }
 
   /**
    * Called when an observed attribute changes.

@@ -49,6 +49,9 @@ function polyline(svg) {
   return m[1].trim().split(/\s+/).filter(Boolean).map((p) => p.split(',').map(Number));
 }
 
+/** Reverses the common HTML escapes so tests can check text survives round-tripping. */
+const decode = (t) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&');
+
 describe('scatter-plot', () => {
   test('draws one point per data point, keeping the raw values for the tooltip', () => {
     const svg = render('scatter-plot', chart(pts([1, 2], [3, 4], [5, 6])));
@@ -99,6 +102,10 @@ describe('line-plot', () => {
     render('line-plot', chart(points));
     assert.equal(JSON.stringify(points), before);
   });
+
+  test('clips the line and its points to the plot area', () => {
+    assert.match(render('line-plot', chart(pts([1, 1]))), /<g clip-path="url\(#plot-clip\)">\s*<polyline/);
+  });
 });
 
 describe('chart base (axes, labels, ticks)', () => {
@@ -138,6 +145,42 @@ describe('chart base (axes, labels, ticks)', () => {
     const [p] = circles(render('scatter-plot', chart(pts([0, 0])), { rangeX: 0, rangeY: 0 }), 'point');
     assert.deepEqual([Number.isFinite(p.cx), Number.isFinite(p.cy)], [true, true], `point drawn at (${p.cx}, ${p.cy})`);
   });
+
+   test('escapes markup in the y-axis label too', () => {
+    const input = '<script>alert(1)</script> & "quoted"';
+    const svg = render('scatter-plot', chart([], { 'y-axis-label': input }));
+    const [, , shown] = labelTexts(svg);
+    assert.equal(shown.includes('<'), false, `raw markup in: ${shown}`);
+    assert.equal(decode(shown), input);
+  });
+
+  test('centered axes show negative ticks (-10 to 10 -> -10, -5, 0, 5, 10)', () => {
+    const svg = render('scatter-plot', chart([]), { center: true, rangeX: 20, rangeY: 20 });
+    const labels = [...svg.matchAll(/class="axis-text"[^>]*>([^<]*)</g)].map((m) => m[1]);
+    assert.deepEqual(labels, ['-10', '-5', '0', '5', '10', '-10', '-5', '0', '5', '10']);
+  });
+
+  test('zero range: no NaN or Infinity anywhere in the SVG, for both chart types', () => {
+    for (const tag of ['scatter-plot', 'line-plot']) {
+      const svg = render(tag, chart(pts([0, 0])), { rangeX: 0, rangeY: 0 });
+      assert.doesNotMatch(svg, /NaN|Infinity/, `${tag} contains NaN or Infinity`);
+    }
+  });
+
+  test('zero range: a point at the origin lands on the bottom-left corner of the plot', () => {
+    const [p] = circles(render('scatter-plot', chart(pts([0, 0])), { rangeX: 0, rangeY: 0 }), 'point');
+    assert.deepEqual([p.cx, p.cy], [PLOT.left, PLOT.bottom]);
+  });
+
+  test('zero range with centerOrigin puts the point in the middle of the plot', () => {
+    const [p] = circles(render('scatter-plot', chart(pts([0, 0])), { center: true, rangeX: 0, rangeY: 0 }), 'point');
+    assert.deepEqual([p.cx, p.cy], [(PLOT.left + PLOT.right) / 2, (PLOT.top + PLOT.bottom) / 2]);
+  });
+
+  test('the SVG <style> block has no "//" comments (invalid CSS)', () => {
+    const style = render('scatter-plot', chart([])).match(/<style>([\s\S]*?)<\/style>/)[1];
+    assert.equal(style.includes('//'), false, 'found "//" in the <style> block');
+  });
 });
 
 describe('tool-tip-modal formatValue', () => {
@@ -151,5 +194,15 @@ describe('tool-tip-modal formatValue', () => {
   test('uses scientific notation for very large and very small positives', () => {
     assert.equal(format('250000'), '2.50e+5');
     assert.equal(format('0.0001'), '1.00e-4');
+  });
+
+  test('formats negative values like positive ones (-5 -> -5.00)', () => {
+    assert.equal(format('-5'), '-5.00');
+    assert.equal(format('-1234.5678'), '-1234.57');
+  });
+
+  test('uses scientific notation for very large and very small negatives', () => {
+    assert.equal(format('-250000'), '-2.50e+5');
+    assert.equal(format('-0.0001'), '-1.00e-4');
   });
 });
