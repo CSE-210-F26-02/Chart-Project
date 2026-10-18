@@ -1,4 +1,17 @@
 /**
+ * Escapes text so it is safe to put inside SVG/HTML markup.
+ * Missing values (undefined/null) become an empty string.
+ */
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
  * @typedef {object} Point
  * @property {Array<number>} coordinate - Array containing the X and Y coordinates of the point
  */
@@ -228,6 +241,11 @@ class PlotBaseElement extends HTMLElement {
   generateGraph(chartData, x, y, center, centerx, centery, rangeX, rangeY, ticks) {
     const minDim = Math.min(x, y);
 
+    // A zero range would divide by zero in scaleX/scaleY (and break the ticks),
+    // e.g. a single point at the origin. Fall back to a range of 1.
+    if (!rangeX) rangeX = 1;
+    if (!rangeY) rangeY = 1;
+
     // TODO: Consolidate size parameters during generation? Update applyPlotElements if so.
 
     const margin = {
@@ -313,7 +331,7 @@ class PlotBaseElement extends HTMLElement {
           <style>
               .grid-line { stroke: #e0e0e0; stroke-width: ${sizes.gridStroke}; stroke-dasharray: ${sizes.gridDash}; }
               .axis-line { stroke: #333; stroke-width: ${sizes.axisStroke}; }
-              // TODO: Plotted line style
+              /* TODO: Plotted line style */
               .plot-line { stroke: #111; stroke-width: ${sizes.axisStroke}; }
               .axis-text { font-family: sans-serif; font-size: ${sizes.tickFont}px; fill: #555; text-anchor: middle; }
               .label-text { font-family: sans-serif; font-size: ${sizes.labelFont}px; font-weight: bold; fill: #333; text-anchor: middle; }
@@ -363,9 +381,9 @@ class PlotBaseElement extends HTMLElement {
     const yLabelY = margin.top + (sizes.plotHeight / 2);
 
     svg += `
-          <text x="${x / 2}" y="${titleY}" class="title-text">${chartData.title}</text>
-          <text x="${margin.left + (sizes.plotWidth / 2)}" y="${xLabelY}" class="label-text">${chartData['x-axis-label']}</text>
-          <text x="${yLabelX}" y="${yLabelY}" class="label-text" transform="rotate(-90, ${yLabelX}, ${yLabelY})">${chartData['y-axis-label']}</text>
+      <text x="${x / 2}" y="${titleY}" class="title-text">${escapeHtml(chartData.title)}</text>
+      <text x="${margin.left + (sizes.plotWidth / 2)}" y="${xLabelY}" class="label-text">${escapeHtml(chartData['x-axis-label'])}</text>
+      <text x="${yLabelX}" y="${yLabelY}" class="label-text" transform="rotate(-90, ${yLabelX}, ${yLabelY})">${escapeHtml(chartData['y-axis-label'])}</text>
       `;
 
     // Let subclasses implement their own plot elements.
@@ -485,14 +503,15 @@ class ToolTipModal extends HTMLElement {
     return ['x-coordinate', 'y-coordinate', 'x-position', 'y-position', 'font-size', 'font-family', 'visible'];
   }
 
-  formatValue(value) {
-    // If the number is larger than 100,000 use scientific notation
-    const num = parseFloat(value);
-    if (num > 100000 || num < 0.001 && num !== 0) {
-      return num.toExponential(2);
-    }
-    return num.toFixed(2);
-  }
+   formatValue(value) {
+     // If the number is larger than 100,000 use scientific notation
+     const num = parseFloat(value);
+     const abs = Math.abs(num);
+     if (abs > 100000 || (abs < 0.001 && abs !== 0)) {
+       return num.toExponential(2);
+     }
+     return num.toFixed(2);
+   }
 
   /**
    * Called when an observed attribute changes.
