@@ -12,6 +12,137 @@
  */
 
 /**
+ * Escapes text so it is displayed literally when inserted into SVG markup.
+ * @param {*} value - The text to escape.
+ * @returns {string} - The escaped text.
+ */
+function escapeXML(value) {
+  const entities = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' };
+  return String(value).replace(/[&<>"']/g, (char) => entities[char]);
+}
+
+/**
+ * Picks "nice" tick values (multiples of 1, 2, 5 or 10) between min and max.
+ * @param {number} min - Smallest value on the axis.
+ * @param {number} max - Largest value on the axis.
+ * @param {number} maxTicks - Roughly how many ticks to show.
+ * @returns {Array<number>} - The tick values.
+ */
+export function getTicks(min, max, maxTicks) {
+  const range = max - min;
+  const roughStep = range / maxTicks;
+  const stepPower = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  const normalizedStep = roughStep / stepPower;
+
+  //Clamp ticks to multiples of 1/2/5/10, whichever is closer
+  let multiplier = 1;
+  if (normalizedStep >= 1.5 && normalizedStep < 3) multiplier = 2;
+  else if (normalizedStep >= 3 && normalizedStep < 7) multiplier = 5;
+  else if (normalizedStep >= 7) multiplier = 10;
+
+  const step = stepPower * multiplier;
+  const startTick = Math.ceil(min / step) * step;
+  //No epsilon bugs since 1e-6 comes after division
+  const numTicks = Math.floor((max - startTick) / step + 1e-6) + 1;
+
+  const ticks = [];
+  for (let i = 0; i < numTicks; i++) {
+    ticks.push(startTick + (i * step));
+  }
+  return ticks;
+}
+
+/**
+ * Formats an axis tick number, switching to scientific notation for very large or small values.
+ * @param {number} num - The tick value.
+ * @returns {string} - The text to show.
+ */
+export function formatAxisNumber(num) {
+  if (num === 0) return "0";
+  const absNum = Math.abs(num);
+  // switch to scientific notation if numbers are large/small
+  if (absNum >= 1e6 || absNum <= 1e-4) {
+    return num.toExponential(2); // e.g., 1.50e6
+  }
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(num);
+}
+
+/**
+ * Works out where everything goes on the chart: margins, sizes, the data -> pixel
+ * scales and the tick values. Shared by the SVG charts and <canvas-scatter-plot>.
+ * Takes the same arguments as PlotBaseElement.generateGraph (minus chartData).
+ * @returns {{margin: object, sizes: object, scaleX: function(number): number,
+ *   scaleY: function(number): number, xTicks: Array<number>, yTicks: Array<number>}}
+ */
+export function computeLayout(x, y, center, centerx, centery, rangeX, rangeY, ticks) {
+  const minDim = Math.min(x, y);
+
+  // TODO: Consolidate size parameters during generation? Update applyPlotElements if so.
+
+  const margin = {
+    top: minDim * 0.08,
+    right: minDim * 0.05,
+    bottom: minDim * 0.12,
+    left: minDim * 0.20
+  };
+
+  // sizes of various graph components as a % of SVG size, can change parameters
+  const sizes = {
+    // Actual plot dimensions
+    plotWidth: x - margin.left - margin.right,
+    plotHeight: y - margin.top - margin.bottom,
+    // Plot component dimensions
+    tickFont: minDim * 0.022,
+    labelFont: minDim * 0.03,
+    titleFont: minDim * 0.04,
+    pointRadius: Math.max(minDim * 0.008, 1.5),
+    axisStroke: Math.max(minDim * 0.003, 0.5),
+    gridStroke: Math.max(minDim * 0.0015, 0.25),
+    gridDash: Math.max(minDim * 0.008, 2)
+  };
+
+  // A zero range (e.g. a single point at the origin) would divide by zero, so treat it as 1
+  if (rangeX === 0) rangeX = 1;
+  if (rangeY === 0) rangeY = 1;
+
+  // calculate domain of graph
+  let domainMinX, domainMaxX, domainMinY, domainMaxY;
+  if (center === true) {
+    domainMinX = centerx - (rangeX / 2);
+    domainMaxX = centerx + (rangeX / 2);
+    domainMinY = centery - (rangeY / 2);
+    domainMaxY = centery + (rangeY / 2);
+  } else {
+    domainMinX = centerx;
+    domainMaxX = centerx + rangeX;
+    domainMinY = centery;
+    domainMaxY = centery + rangeY;
+  }
+
+  // Data point -> graph point functions, change these if we want to use a different scale (e.g logarithmic)
+  const scaleX = (val) => margin.left + ((val - domainMinX) / rangeX) * sizes.plotWidth;
+  const scaleY = (val) => margin.top + sizes.plotHeight - ((val - domainMinY) / rangeY) * sizes.plotHeight;
+
+  const xTicks = getTicks(domainMinX, domainMaxX, ticks);
+  const yTicks = getTicks(domainMinY, domainMaxY, ticks);
+
+  return { margin, sizes, scaleX, scaleY, xTicks, yTicks };
+}
+
+/**
+ * Where the reset-view button goes: a square in the top-right corner of the plot area.
+ * Shared by the SVG charts and <canvas-scatter-plot> so the button is in the same place.
+ * @param {number} x - Width of the component
+ * @param {number} y - Height of the component
+ * @param {object} margin - The margin from computeLayout()
+ * @returns {{x: number, y: number, size: number}} - Top-left corner and side length in pixels.
+ */
+export function resetButtonLayout(x, y, margin) {
+  const size = Math.max(Math.min(x, y) * 0.07, 24);
+  return { x: x - margin.right - size, y: margin.top, size };
+}
+
+/**
  * A custom element representing a plottable scatter plot.
  * @property {Array<Point>} points - The data points to plot.
  * @property {string} title - The title of the chart.
@@ -182,13 +313,296 @@ class PlotBaseElement extends HTMLElement {
     this._anchorX = anchorX;
     this._anchorY = anchorY;
     this._rangeX = rangeX;
-    this._rangeY = rangeY;
-    this._ticks = ticks;
+  this._rangeY = rangeY;
+  this._ticks = ticks;
+
+  // Save the initial viewport for the reset button.
+  this._initialViewport = {
+    centerOrigin,
+    anchorX,
+    anchorY,
+    rangeX,
+    rangeY
+  };
+
+  this.renderGraph();
+  }
+      
+
+  /**
+   * Restores the chart to its original viewport.
+   * @returns {void}
+   */
+  resetViewport() {
+    if (!this._initialViewport) {
+      return;
+    }
+
+    const initial = this._initialViewport;
+
+    this._center_origin = initial.centerOrigin;
+    this._anchorX = initial.anchorX;
+    this._anchorY = initial.anchorY;
+    this._rangeX = initial.rangeX;
+    this._rangeY = initial.rangeY;
+
+    this._drag = null;
+    this.style.cursor = 'grab';
+
     this.renderGraph();
   }
 
+  
+  /**
+   * Makes an element act as the reset-view button: click, Enter or Space resets the view.
+   * @param {Element} control - The reset button element.
+   * @returns {void}
+   */
+  attachResetControl(control) {
+    control.addEventListener('pointerdown', (event) => {
+      // Prevent the chart's drag handler from starting.
+      event.stopPropagation();
+    });
+
+    control.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.resetViewport();
+    });
+
+    control.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        event.stopPropagation();
+        this.resetViewport();
+      }
+    });
+  }
+
+  /**
+   * Gets the current visible coordinate boundaries of the graph.
+   * @returns {object} - The minimum and maximum X and Y values.
+   */
+  getViewport() {
+    const minX = this._center_origin
+      ? this._anchorX - (this._rangeX / 2)
+      : this._anchorX;
+
+    const minY = this._center_origin
+      ? this._anchorY - (this._rangeY / 2)
+      : this._anchorY;
+
+    return {
+      minX: minX,
+      maxX: minX + this._rangeX,
+      minY: minY,
+      maxY: minY + this._rangeY
+    };
+  }
+
+  /**
+   * Updates the visible coordinate boundaries of the graph.
+   * @param {number} minX - Minimum visible X value.
+   * @param {number} maxX - Maximum visible X value.
+   * @param {number} minY - Minimum visible Y value.
+   * @param {number} maxY - Maximum visible Y value.
+   * @returns {void}
+   */
+  setViewport(minX, maxX, minY, maxY) {
+    this._rangeX = maxX - minX;
+    this._rangeY = maxY - minY;
+
+    this._anchorX = this._center_origin
+      ? (minX + maxX) / 2
+      : minX;
+
+    this._anchorY = this._center_origin
+      ? (minY + maxY) / 2
+      : minY;
+
+    this.renderGraph();
+  }
+
+  /**
+   * Converts a mouse position to normalized graph coordinates.
+   * Works with both SVG and Canvas rendering.
+   * The bottom-left corner is (0, 0) and the top-right is (1, 1).
+   * @param {PointerEvent|WheelEvent} event - The mouse event.
+   * @returns {object|null} - The normalized X and Y coordinates.
+   */
+  getMousePosition(event) {
+    const surface = this.shadowDOM.querySelector('canvas, svg');
+
+    if (!surface) {
+      return null;
+    }
+
+    const rect = surface.getBoundingClientRect();
+
+    if (!rect.width || !rect.height) {
+      return null;
+    }
+
+    const x = (event.clientX - rect.left) *
+      this._width / rect.width;
+
+    const y = (event.clientY - rect.top) *
+      this._height / rect.height;
+
+    const minDim = Math.min(this._width, this._height);
+
+    const margin = {
+      top: minDim * 0.08,
+      right: minDim * 0.05,
+      bottom: minDim * 0.12,
+      left: minDim * 0.20
+    };
+
+    const plotWidth = this._width - margin.left - margin.right;
+    const plotHeight = this._height - margin.top - margin.bottom;
+
+    if (plotWidth <= 0 || plotHeight <= 0) {
+      return null;
+    }
+
+    return {
+      x: (x - margin.left) / plotWidth,
+      y: 1 - ((y - margin.top) / plotHeight)
+    };
+  }
+
+
+  
+  /**
+   * Sets up renderer-independent zooming and panning.
+   * Event listeners are attached to the chart element so they
+   * continue working when SVG or Canvas content is redrawn.
+   * @returns {void}
+   */
+  setupViewportListeners() {
+    if (this._viewportListenersAttached) {
+      return;
+    }
+
+    this._viewportListenersAttached = true;
+
+    this.style.cursor = 'grab';
+    this.style.touchAction = 'none';
+    this.style.userSelect = 'none';
+
+    // Zoom uniformly around the mouse position.
+    this.addEventListener('wheel', (event) => {
+      const mouse = this.getMousePosition(event);
+
+      if (!mouse || mouse.x < 0 || mouse.x > 1 ||
+          mouse.y < 0 || mouse.y > 1) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const bounds = this.getViewport();
+
+      // Trackpad pinch gestures commonly use Ctrl+wheel events.
+      // Increase pinch sensitivity without changing regular scrolling.
+      const sensitivity = event.ctrlKey ? 0.003 : 0.001;
+      const zoomFactor = Math.exp(event.deltaY * sensitivity);
+
+      // Both axes use exactly the same zoom factor.
+      const newRangeX = this._rangeX * zoomFactor;
+      const newRangeY = this._rangeY * zoomFactor;
+
+      if (newRangeX < 1e-9 || newRangeY < 1e-9 ||
+          newRangeX > 1e12 || newRangeY > 1e12) {
+        return;
+      }
+
+      const cursorX = bounds.minX + mouse.x * this._rangeX;
+      const cursorY = bounds.minY + mouse.y * this._rangeY;
+
+      this.setViewport(
+        cursorX - mouse.x * newRangeX,
+        cursorX + (1 - mouse.x) * newRangeX,
+        cursorY - mouse.y * newRangeY,
+        cursorY + (1 - mouse.y) * newRangeY
+      );
+    }, { passive: false });
+
+    // Begin dragging the graph.
+    this.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      const mouse = this.getMousePosition(event);
+
+      if (!mouse || mouse.x < 0 || mouse.x > 1 ||
+          mouse.y < 0 || mouse.y > 1) {
+        return;
+      }
+
+      const tooltip = document.getElementById('my-tooltip');
+
+      if (tooltip) {
+        tooltip.setAttribute('visible', 'false');
+      }
+
+      clearTimeout(window.__tooltipTimeout);
+      cancelAnimationFrame(window.__followRaf);
+
+      this._drag = {
+        x: mouse.x,
+        y: mouse.y
+      };
+
+      this.setPointerCapture(event.pointerId);
+      this.style.cursor = 'grabbing';
+      event.preventDefault();
+    });
+
+    // Shift the viewport while dragging.
+    this.addEventListener('pointermove', (event) => {
+      if (!this._drag) {
+        return;
+      }
+
+      const mouse = this.getMousePosition(event);
+
+      if (!mouse) {
+        return;
+      }
+
+      const bounds = this.getViewport();
+
+      const dx = (mouse.x - this._drag.x) * this._rangeX;
+      const dy = (mouse.y - this._drag.y) * this._rangeY;
+
+      this.setViewport(
+        bounds.minX - dx,
+        bounds.maxX - dx,
+        bounds.minY - dy,
+        bounds.maxY - dy
+      );
+
+      // Update the drag origin so zooming during a pan is preserved.
+      this._drag.x = mouse.x;
+      this._drag.y = mouse.y;
+    });
+
+    // Stop dragging when the mouse is released.
+    const stopDrag = () => {
+      this._drag = null;
+      this.style.cursor = 'grab';
+    };
+
+    this.addEventListener('pointerup', stopDrag);
+    this.addEventListener('pointercancel', stopDrag);
+    this.addEventListener('lostpointercapture', stopDrag);
+  }
+
+
   connectedCallback() {
     // This method is called when the element is added to the DOM
+    this.setupViewportListeners();
   }
 
   disconnectedCallback() {
@@ -226,94 +640,15 @@ class PlotBaseElement extends HTMLElement {
    */
 
   generateGraph(chartData, x, y, center, centerx, centery, rangeX, rangeY, ticks) {
-    const minDim = Math.min(x, y);
-
-    // TODO: Consolidate size parameters during generation? Update applyPlotElements if so.
-
-    const margin = {
-      top: minDim * 0.08,
-      right: minDim * 0.05,
-      bottom: minDim * 0.12,
-      left: minDim * 0.20
-    };
-
-    // sizes of various graph components as a % of SVG size, can change parameters
-    const sizes = {
-      // Actual plot dimensions
-      plotWidth: x - margin.left - margin.right,
-      plotHeight: y - margin.top - margin.bottom,
-      // Plot component dimensions
-      tickFont: minDim * 0.022,
-      labelFont: minDim * 0.03,
-      titleFont: minDim * 0.04,
-      pointRadius: Math.max(minDim * 0.008, 1.5),
-      axisStroke: Math.max(minDim * 0.003, 0.5),
-      gridStroke: Math.max(minDim * 0.0015, 0.25),
-      gridDash: Math.max(minDim * 0.008, 2)
-    };
-
-    // calculate domain of graph
-    let domainMinX, domainMaxX, domainMinY, domainMaxY;
-    if (center === true) {
-      domainMinX = centerx - (rangeX / 2);
-      domainMaxX = centerx + (rangeX / 2);
-      domainMinY = centery - (rangeY / 2);
-      domainMaxY = centery + (rangeY / 2);
-    } else {
-      domainMinX = centerx;
-      domainMaxX = centerx + rangeX;
-      domainMinY = centery;
-      domainMaxY = centery + rangeY;
-    }
-
-    // Data point -> graph point functions, change these if we want to use a different scale (e.g logarithmic)
-    const scaleX = (val) => margin.left + ((val - domainMinX) / rangeX) * sizes.plotWidth;
-    const scaleY = (val) => margin.top + sizes.plotHeight - ((val - domainMinY) / rangeY) * sizes.plotHeight;
-
-    //add tick lines
-    const getTicks = (min, max, maxTicks) => {
-      const range = max - min;
-      const roughStep = range / maxTicks;
-      const stepPower = Math.pow(10, Math.floor(Math.log10(roughStep)));
-      const normalizedStep = roughStep / stepPower;
-
-      //Clamp ticks to multiples of 1/2/5/10, whichever is closer
-      let multiplier = 1;
-      if (normalizedStep >= 1.5 && normalizedStep < 3) multiplier = 2;
-      else if (normalizedStep >= 3 && normalizedStep < 7) multiplier = 5;
-      else if (normalizedStep >= 7) multiplier = 10;
-
-      const step = stepPower * multiplier;
-      const startTick = Math.ceil(min / step) * step;
-      //No epsilon bugs since 1e-6 comes after division
-      const numTicks = Math.floor((max - startTick) / step + 1e-6) + 1;
-
-      const ticks = [];
-      for (let i = 0; i < numTicks; i++) {
-        ticks.push(startTick + (i * step));
-      }
-      return ticks;
-    };
-    const xTicks = getTicks(domainMinX, domainMaxX, ticks);
-    const yTicks = getTicks(domainMinY, domainMaxY, ticks);
-
-    //format numbers properly
-    const formatAxisNumber = (num) => {
-      if (num === 0) return "0";
-      const absNum = Math.abs(num);
-      // switch to scientific notation if numbers are large/small
-      if (absNum >= 1e6 || absNum <= 1e-4) {
-        return num.toExponential(2); // e.g., 1.50e6
-      }
-      return new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(num);
-    };
+    const { margin, sizes, scaleX, scaleY, xTicks, yTicks } =
+      computeLayout(x, y, center, centerx, centery, rangeX, rangeY, ticks);
 
     // build svg, check style for possible customization, using class tags for simplicity
     let svg = `<svg width="${x}" height="${y}" viewBox="0 0 ${x} ${y}" xmlns="http://www.w3.org/2000/svg">
           <style>
               .grid-line { stroke: #e0e0e0; stroke-width: ${sizes.gridStroke}; stroke-dasharray: ${sizes.gridDash}; }
               .axis-line { stroke: #333; stroke-width: ${sizes.axisStroke}; }
-              // TODO: Plotted line style
+              /* TODO: Plotted line style */
               .plot-line { stroke: #111; stroke-width: ${sizes.axisStroke}; }
               .axis-text { font-family: sans-serif; font-size: ${sizes.tickFont}px; fill: #555; text-anchor: middle; }
               .label-text { font-family: sans-serif; font-size: ${sizes.labelFont}px; font-weight: bold; fill: #333; text-anchor: middle; }
@@ -363,15 +698,64 @@ class PlotBaseElement extends HTMLElement {
     const yLabelY = margin.top + (sizes.plotHeight / 2);
 
     svg += `
-          <text x="${x / 2}" y="${titleY}" class="title-text">${chartData.title}</text>
-          <text x="${margin.left + (sizes.plotWidth / 2)}" y="${xLabelY}" class="label-text">${chartData['x-axis-label']}</text>
-          <text x="${yLabelX}" y="${yLabelY}" class="label-text" transform="rotate(-90, ${yLabelX}, ${yLabelY})">${chartData['y-axis-label']}</text>
+          <text x="${x / 2}" y="${titleY}" class="title-text">${escapeXML(chartData.title ?? '')}</text>
+          <text x="${margin.left + (sizes.plotWidth / 2)}" y="${xLabelY}" class="label-text">${escapeXML(chartData['x-axis-label'] ?? '')}</text>
+          <text x="${yLabelX}" y="${yLabelY}" class="label-text" transform="rotate(-90, ${yLabelX}, ${yLabelY})">${escapeXML(chartData['y-axis-label'] ?? '')}</text>
       `;
 
     // Let subclasses implement their own plot elements.
     svg += this.applyPlotElements(chartData, sizes, margin, scaleX, scaleY);
 
+    // Reset control appears when the chart is hovered or focused.
+    const { x: buttonX, y: buttonY, size: buttonSize } = resetButtonLayout(x, y, margin);
+
+    svg += `
+      <style>
+        .reset-view-control {
+          opacity: 0;
+          cursor: pointer;
+          transition: opacity 0.15s ease;
+        }
+
+        svg:hover .reset-view-control,
+        .reset-view-control:focus {
+          opacity: 1;
+        }
+
+        .reset-view-control rect {
+          fill: #ffffff;
+          stroke: #999999;
+          stroke-width: 1;
+        }
+
+        .reset-view-control:hover rect,
+        .reset-view-control:focus rect {
+          fill: #eeeeee;
+        }
+
+        .reset-view-control text {
+          font-family: sans-serif;
+          font-size: ${buttonSize * 0.65}px;
+          fill: #333333;
+          text-anchor: middle;
+          dominant-baseline: central;
+          pointer-events: none;
+        }
+      </style>
+
+      <g class="reset-view-control"
+        role="button"
+        tabindex="0"
+        aria-label="Reset chart view"
+        transform="translate(${buttonX}, ${buttonY})">
+        <title>Reset chart view</title>
+        <rect width="${buttonSize}" height="${buttonSize}" rx="4" />
+        <text x="${buttonSize / 2}" y="${buttonSize / 2}">↺</text>
+      </g>
+    `;
+
     return svg + `</svg>`;
+
   }
 
   /**
@@ -409,23 +793,64 @@ class PlotBaseElement extends HTMLElement {
     }
   }
 
+  
   /**
-   * Renders the graph and places it in the shadow (virtual DOM).
+   * Renders the graph and places it in the shadow DOM.
    * @returns {void}
    */
   renderGraph() {
+    // Avoid rendering before chart properties are initialized.
+    if (
+      !Number.isFinite(this._width) ||
+      !Number.isFinite(this._height) ||
+      !Number.isFinite(this._rangeX) ||
+      !Number.isFinite(this._rangeY) ||
+      !Number.isFinite(this._anchorX) ||
+      !Number.isFinite(this._anchorY) ||
+      !Number.isFinite(this._ticks) ||
+      this._width <= 0 ||
+      this._height <= 0 ||
+      this._ticks <= 0 ||
+      this._rangeX < 0 ||
+      this._rangeY < 0 ||
+      !Array.isArray(this._points)
+    ) {
+      return;
+    }
+
     try {
+      // Stop any active tooltip animation before redrawing.
+      clearTimeout(window.__tooltipTimeout);
+      cancelAnimationFrame(window.__followRaf);
+
+      const tooltip = document.getElementById('my-tooltip');
+
+      if (tooltip) {
+        tooltip.setAttribute('visible', 'false');
+      }
+
       this.shadowDOM.innerHTML = this.generateGraph({
         points: this._points,
-        "x-axis-label": this._xAxisLabel,
-        "y-axis-label": this._yAxisLabel,
-        "title": this._title
-      }, this._width, this._height, this._center_origin, this._anchorX, this._anchorY, this._rangeX, this._rangeY, this._ticks);
-      this.setupHoverListeners();
+        'x-axis-label': this._xAxisLabel,
+        'y-axis-label': this._yAxisLabel,
+        'title': this._title
+      }, this._width, this._height, this._center_origin,
+         this._anchorX, this._anchorY, this._rangeX,
+         this._rangeY, this._ticks);
+
+      
+      // Reattach reset controls after each SVG redraw.
+      const resetButton = this.shadowDOM.querySelector('.reset-view-control');
+
+      if (resetButton) {
+        this.attachResetControl(resetButton);
+      }
+
     } catch (error) {
       console.error('Error rendering graph:', error);
     }
   }
+
 
   /**
    * Sets up the hover listeners for the graph when the mouse enters a data point.
@@ -488,7 +913,8 @@ class ToolTipModal extends HTMLElement {
   formatValue(value) {
     // If the number is larger than 100,000 use scientific notation
     const num = parseFloat(value);
-    if (num > 100000 || num < 0.001 && num !== 0) {
+    const abs = Math.abs(num);
+    if (abs > 100000 || (abs < 0.001 && abs !== 0)) {
       return num.toExponential(2);
     }
     return num.toFixed(2);
