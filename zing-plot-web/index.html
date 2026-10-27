@@ -10,28 +10,11 @@
 
     <title>Zing Plot Plus Plus</title>
 
-    <link rel="stylesheet" href="./style.css?v=2" />
-    <script src="script.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/zing-plot-plus-plus@1.0.10/src/detailedPlots.js" type="module" defer></script>
+    <link rel="stylesheet" href="./style.css?v=7" />
+    <script src="script.js?v=4" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/bros-zing-plot-plus-plus@1.0.12/src/detailedPlots.js" type="module" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/bros-zing-plot-plus-plus@1.0.12/src/canvasScatterPlot.js" type="module" defer></script>
 
-    <style>
-  /*  change layout width and height */
-  .app {
-    width: 130%;
-    max-width: none !important;
-    position: relative;
-    left: 50%;
-    margin: 0 !important;
-    transform: translateX(-50%) scale(0.6) !important;
-    transform-origin: top center !important;
-  }
-
-  /* Keep the chart container height independent of its width. */
-  .chart-container {
-    aspect-ratio: auto;
-    height: 710px;
-  }
-    </style>
   </head>
 
   <body>
@@ -186,7 +169,7 @@
                 >1, 2, 3, 4, 5, 6</textarea>
 
                 <p class="help" id="x-help">
-                  Enter x-axis values separated by commas (e.g. 1, 2, 3, 4, 5, 6).
+                  Enter x-axis values separated by commas, no thousands separators (e.g. 1, 2, 3, 4, 5, 6).
                 </p>
 
                 <label for="y-values">Y Values</label>
@@ -234,7 +217,7 @@
                   </button>
 
                   <small id="file-status">
-                    Supports .json and .csv files
+                    Supports .json and .csv · max 5 MB · up to 10,000 points
                   </small>
 
                   <input
@@ -243,6 +226,14 @@
                     accept=".json,.csv,application/json,text/csv"
                     hidden
                   />
+                </div>
+
+                <!-- Shown by importFile() when a file has 3+ numeric columns. -->
+                <div class="column-picker" id="column-picker" hidden>
+                  <label for="x-column">X column</label>
+                  <select id="x-column"></select>
+                  <label for="y-column">Y column</label>
+                  <select id="y-column"></select>
                 </div>
               </div>
             </div>
@@ -311,5 +302,58 @@
         </section>
       </div>
     </main>
+
+    <dialog id="export-dialog" class="export-dialog" aria-labelledby="export-title">
+      <div class="export-dialog-content">
+        <div class="export-dialog-header">
+          <div>
+            <h2 id="export-title">Export Preview</h2>
+            <p>Choose an image size before downloading.</p>
+          </div>
+          <button type="button" id="export-close" class="export-close" aria-label="Close export preview">×</button>
+        </div>
+
+        <div class="export-controls">
+          <label for="export-resolution">Resolution
+            <select id="export-resolution">
+              <option value="1280">1280 × 960 px</option>
+              <option value="1920" selected>1920 × 1440 px</option>
+              <option value="2560">2560 × 1920 px</option>
+              <option value="3840">3840 × 2880 px</option>
+            </select>
+          </label>
+          <label for="export-ratio">Aspect ratio
+            <select id="export-ratio">
+              <option value="1:1">1:1 Square</option>
+              <option value="4:3" selected>4:3 Standard</option>
+              <option value="16:9">16:9 Widescreen</option>
+              <option value="3:4">3:4 Portrait</option>
+            </select>
+          </label>
+        </div>
+        <p id="svg-export-note" class="svg-export-note" hidden>
+          SVG files scale without losing quality.
+        </p>
+
+        <div class="export-preview-frame">
+          <img id="export-preview" alt="Chart export preview" />
+        </div>
+
+        <div class="export-footer">
+          <div class="export-option">
+            <label for="export-format">Format
+              <select id="export-format">
+                <option value="png" selected>PNG</option>
+                <option value="svg">SVG</option>
+              </select>
+            </label>
+          </div>
+          <div class="export-actions">
+            <button type="button" id="export-cancel">Cancel</button>
+            <button type="button" id="export-download" class="save">Download</button>
+          </div>
+        </div>
+      </div>
+    </dialog>
   </body>
 </html>
